@@ -1,67 +1,44 @@
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const chromium = require('@sparticuz/chromium');
-const http = require('http');
 
-// Servidor para Render
-http.createServer((req, res) => res.end('Encendedor Funcionando')).listen(process.env.PORT || 10000);
+// 1. ACTIVAMOS EL ESCUDO
+puppeteer.use(StealthPlugin());
 
 async function ejecutarEncendido() {
-    console.log("Iniciando intento de encendido (Tolerancia: 3 minutos)...");
-    let browser = null;
-    try {
-        browser = await puppeteer.launch({
-            args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-            executablePath: await chromium.executablePath(),
-            headless: false
-        });
+    const browser = await puppeteer.launch({
+        args: [...chromium.args, '--no-sandbox'],
+        executablePath: await chromium.executablePath(),
+        headless: true // Ya no necesitas ponerlo en false
+    });
 
-        const page = await browser.newPage();
-        
-        // --- CONFIGURACIÓN DE TIEMPOS (3 MINUTOS) ---
-        const TRES_MINUTOS = 180000;
-        await page.setDefaultNavigationTimeout(TRES_MINUTOS);
-        await page.setDefaultTimeout(TRES_MINUTOS);
+    const page = await browser.newPage();
 
-        // Bloquear imágenes para cargar más rápido y ahorrar RAM
-        await page.setRequestInterception(true);
-        page.on('request', (req) => {
-            if (req.resourceType() === 'image') req.abort();
-            else req.continue();
-        });
+    // 2. CAMBIAMOS LA IDENTIDAD
+    // Esto hace que Aternos crea que estás usando una PC real con Chrome
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
-        console.log("Cargando página de login...");
-        await page.goto('https://aternos.org/go/', { waitUntil: 'networkidle2' });
+    console.log("Entrando a Aternos como usuario humano...");
+    await page.goto('https://aternos.org/go/');
 
-        console.log("Escribiendo credenciales...");
-        await page.type('#user', process.env.ATERNOS_USER);
-        await page.type('#password', process.env.ATERNOS_PASS);
-        
-        // Clic en login y esperamos un momento
-        await Promise.all([
-            page.click('#login'),
-            page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => console.log("Navegación lenta, continuando..."))
-        ]);
+    // 3. CAMBIAMOS EL COMPORTAMIENTO (Evitamos los clics de robot)
+    // Usamos 'evaluate' para ejecutar el clic desde dentro del sitio
+    await page.type('#user', process.env.ATERNOS_USER);
+    await page.type('#password', process.env.ATERNOS_PASS);
+    
+    await page.evaluate(() => {
+        document.querySelector('#login').click();
+    });
 
-        console.log("Entrando al panel del servidor...");
-        await page.goto('https://aternos.org/server/', { waitUntil: 'networkidle2' });
+    await page.waitForNavigation();
+    await page.goto('https://aternos.org/server/');
 
-        // Buscamos el botón de encender (ID: start)
-        console.log("Buscando el botón de encendido...");
-        const botonEncender = await page.waitForSelector('#start', { visible: true, timeout: TRES_MINUTOS });
-        
-        await botonEncender.click();
-        console.log("✅ ¡Botón presionado con éxito!");
+    // El clic "invisible"
+    await page.waitForSelector('#start');
+    await page.evaluate(() => {
+        document.querySelector('#start').click();
+    });
 
-    } catch (error) {
-        console.error("❌ Error tras esperar 3 min:", error.message);
-    } finally {
-        if (browser) {
-            await browser.close();
-            console.log("Navegador cerrado.");
-        }
-    }
+    console.log("¡Hecho! Servidor en marcha.");
+    await browser.close();
 }
-
-// Ejecutar al inicio y luego cada 20 minutos
-ejecutarEncendido();
-setInterval(ejecutarEncendido, 1200000);
