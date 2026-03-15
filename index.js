@@ -1,47 +1,40 @@
 const axios = require('axios');
-const http = require('http');
 
-// Servidor de mantenimiento para que Render no duerma el proceso
-http.createServer((req, res) => res.end('Portal activo')).listen(process.env.PORT || 10000);
+// Estos encabezados engañan a Aternos haciéndole creer que eres un móvil real
+const headers = {
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3',
+    'Referer': 'https://aternos.org/server/',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'same-origin',
+    'Cookie': 'AQUI_VA_TU_COOKIE_LARGA_DE_SESION'
+};
 
-const MOBILE_UA = 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36';
-
-async function encender() {
-    console.log("Intentando encender con headers blindados...");
-    
+async function encenderServidor() {
     try {
-        // Ejecutamos la petición con los headers necesarios para evitar el error 403
-        const res = await axios.post('https://aternos.org/panel/ajax/start.php', 
-            `server=${process.env.SERVER_ID}`, {
+        console.log("Intentando conectar con Aternos...");
+        
+        // 1. Primero entramos a la página del servidor para obtener los tokens de seguridad
+        await axios.get('https://aternos.org/server/', { headers });
+        
+        // 2. Ejecutamos la petición de inicio (el botón de encendido)
+        const response = await axios.get('https://aternos.org/panel/ajax/start.php', {
             headers: {
-                'Cookie': `ATERNOS_SESSION=${process.env.ATERNOS_COOKIE}`,
-                'User-Agent': MOBILE_UA,
-                'Referer': 'https://aternos.org/panel/',
-                'Origin': 'https://aternos.org',
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+                ...headers,
+                'X-Requested-With': 'XMLHttpRequest'
             }
         });
 
-        // Verificamos si Aternos aceptó la petición
-        if (res.data && res.data.success) {
-            console.log("✅ ¡Señal aceptada! Servidor iniciando.");
-        } else {
-            console.log("⚠️ Aternos respondió correctamente pero el servidor no encendió.");
-            console.log("Respuesta del servidor:", JSON.stringify(res.data));
-        }
+        console.log("Respuesta de Aternos:", response.data);
+        console.log("✅ ¡Señal enviada con éxito!");
 
-    } catch (e) {
-        if (e.response && e.response.status === 403) {
-            console.error("❌ Error 403: Cloudflare ha bloqueado la IP de Render.");
-        } else {
-            console.error("❌ Error de red:", e.message);
-        }
+    } catch (error) {
+        console.error("❌ Error al conectar:", error.message);
     }
 }
 
-// Ejecutar cada 15 minutos
-setInterval(encender, 900000);
-encender();
+encenderServidor();
