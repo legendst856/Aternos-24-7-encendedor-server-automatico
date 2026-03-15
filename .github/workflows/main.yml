@@ -1,0 +1,22 @@
+name: Tamcpoco-Portal
+on:
+  schedule:
+    - cron: '*/15 * * * *' # Se ejecuta cada 15 minutos
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install
+        run: npm install
+      - name: Run Portal
+        run: node index.js
+        env:
+          ATERNOS_USER: ${{ secrets.ATERNOS_USER }}
+          ATERNOS_PASS: ${{ secrets.ATERNOS_PASS }}
