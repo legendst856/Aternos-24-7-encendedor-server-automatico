@@ -12,7 +12,7 @@ async function ejecutarEncendido() {
         browser = await puppeteer.launch({
             args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
             executablePath: await chromium.executablePath(),
-            headless: true
+            headless: false
         });
 
         const page = await browser.newPage();
