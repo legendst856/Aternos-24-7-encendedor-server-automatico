@@ -1,45 +1,41 @@
 const puppeteer = require('puppeteer');
 
 (async () => {
-  console.log("Iniciando navegador...");
-  
   const browser = await puppeteer.launch({
     headless: "new",
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
   try {
     const page = await browser.newPage();
-    
-    // Establecer un tamaño de pantalla realista
-    await page.setViewport({ width: 1280, height: 800 });
-    
-    console.log("Entrando a Aternos...");
+    // Navegamos directo a la página de login
     await page.goto('https://aternos.org/go/', { waitUntil: 'networkidle2' });
 
-    // Escribir usuario y contraseña desde las variables de entorno
-    console.log("Iniciando sesión...");
-    await page.type('#user', process.env.ATERNOS_USER);
-    await page.type('#password', process.env.ATERNOS_PASS);
+    console.log("Esperando a que cargue el formulario de login...");
     
-    // Clic en login
-    await page.click('#login');
+    // Esperamos hasta 30 segundos a que aparezca el campo de usuario
+    // A veces el ID no es '#user', probamos con varios selectores comunes
+    await page.waitForSelector('input[name="user"], #user', { timeout: 30000 });
+
+    console.log("Formulario detectado, escribiendo credenciales...");
+    await page.type('input[name="user"], #user', process.env.ATERNOS_USER);
+    await page.type('input[name="password"], #password', process.env.ATERNOS_PASS);
     
-    // Esperar a que cargue el dashboard del servidor
-    console.log("Esperando carga de panel...");
+    await page.click('button[type="submit"], #login');
+    
+    console.log("Login enviado, esperando panel...");
     await page.waitForNavigation({ waitUntil: 'networkidle2' });
     
-    // Clic en el botón de encender (se asegura de que sea el botón de iniciar)
-    console.log("Buscando botón de encendido...");
-    await page.waitForSelector('.btn-success');
+    // Aquí esperamos el botón de encendido
+    await page.waitForSelector('.btn-success', { timeout: 15000 });
     await page.click('.btn-success');
     
-    console.log("✅ ¡Botón presionado correctamente!");
-    
+    console.log("✅ ¡Botón presionado!");
   } catch (error) {
-    console.error("❌ Error durante la ejecución:", error.message);
+    console.error("❌ Error grave:", error.message);
+    // Tomar una captura de pantalla si falla para depurar
+    await page.screenshot({ path: 'error.png' });
   } finally {
     await browser.close();
-    console.log("Navegador cerrado.");
   }
 })();
