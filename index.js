@@ -3,53 +3,55 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const chromium = require('@sparticuz/chromium');
 const http = require('http');
 
-// Configuración Stealth para ser invisible ante Cloudflare
 puppeteer.use(StealthPlugin());
 
-// Servidor minimalista para mantener el proceso vivo
 http.createServer((req, res) => res.end('Encendedor Activo')).listen(process.env.PORT || 10000);
 
 async function ejecutarEncendido() {
-    console.log("Iniciando navegador minimizado...");
+    console.log("Iniciando encendido...");
     let browser = null;
     try {
         browser = await puppeteer.launch({
-            args: [
-                ...chromium.args,
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--single-process',
-                '--no-zygote'
-            ],
+            args: [...chromium.args, '--no-sandbox', '--disable-setuid-usage', '--disable-gpu'],
             executablePath: await chromium.executablePath(),
-            headless: 'new' // Modo headless eficiente
+            headless: 'new'
         });
 
         const page = await browser.newPage();
         
-        // Simular navegador real
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-
+        // 1. Ir a la página de login
         console.log("Navegando a Aternos...");
-        await page.goto('https://aternos.org/go/', { waitUntil: 'networkidle2', timeout: 60000 });
+        await page.goto('https://aternos.org/go/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-        // Login
-        console.log("Ingresando credenciales...");
-        await page.type('#user', process.env.ATERNOS_USER);
-        await page.type('#password', process.env.ATERNOS_PASS);
-        await page.evaluate(() => document.querySelector('#login').click());
+        // 2. ESPERA INTELIGENTE: Asegurarnos de que el formulario existe
+        console.log("Esperando formulario de login...");
+        try {
+            await page.waitForSelector('#user', { visible: true, timeout: 30000 });
+        } catch (e) {
+            console.log("¡No se encontró el campo de usuario! Revisando si estamos ya logueados...");
+            // Si no está, quizás ya entramos directo
+        }
 
-        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
+        // 3. Escribir usuario y pass solo si el campo existe
+        if (await page.$('#user')) {
+            await page.type('#user', process.env.ATERNOS_USER);
+            await page.type('#password', process.env.ATERNOS_PASS);
+            await page.evaluate(() => document.querySelector('#login').click());
+            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+        }
+
+        // 4. Ir directo al panel
+        console.log("Entrando al panel...");
         await page.goto('https://aternos.org/server/', { waitUntil: 'networkidle2', timeout: 60000 });
 
-        // Clic en encender
-        console.log("Activando servidor...");
-        await page.waitForSelector('#start', { visible: true, timeout: 60000 });
-        await page.evaluate(() => document.querySelector('#start').click());
-        
-        console.log("✅ Encendido exitoso.");
+        // 5. Encender
+        const startBtn = await page.$('#start');
+        if (startBtn) {
+            await page.evaluate(() => document.querySelector('#start').click());
+            console.log("✅ ¡Botón presionado!");
+        } else {
+            console.log("⚠️ No se encontró el botón de inicio. ¿El servidor ya está encendido?");
+        }
 
     } catch (error) {
         console.error("❌ Error durante el encendido:", error.message);
@@ -58,6 +60,5 @@ async function ejecutarEncendido() {
     }
 }
 
-// Ejecutar ahora y luego cada 20 minutos
 ejecutarEncendido();
 setInterval(ejecutarEncendido, 1200000);
