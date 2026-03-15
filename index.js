@@ -5,7 +5,7 @@ const http = require('http');
 
 puppeteer.use(StealthPlugin());
 
-// Mantener vivo el proceso para Render
+// Servidor minimalista para mantener el proceso activo en Render
 http.createServer((req, res) => res.end('Encendedor Activo')).listen(process.env.PORT || 10000);
 
 async function ejecutarEncendido() {
@@ -22,7 +22,7 @@ async function ejecutarEncendido() {
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
         console.log("Navegando a Aternos...");
-        await page.goto('https://aternos.org/go/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.goto('https://aternos.org/go/', { waitUntil: 'domcontentloaded', timeout: 90000 });
 
         // Login (Si aparece)
         if (await page.$('#user')) {
@@ -30,34 +30,47 @@ async function ejecutarEncendido() {
             await page.type('#user', process.env.ATERNOS_USER);
             await page.type('#password', process.env.ATERNOS_PASS);
             await page.evaluate(() => document.querySelector('#login').click());
-            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
+            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 90000 });
         }
 
         console.log("Entrando al panel...");
-        await page.goto('https://aternos.org/server/', { waitUntil: 'networkidle2', timeout: 60000 });
+        await page.goto('https://aternos.org/server/', { waitUntil: 'networkidle2', timeout: 90000 });
 
-        // Lógica maestra: buscar por texto
-        console.log("Buscando botón de 'Encender'...");
-        const presionado = await page.evaluate(() => {
-            // Busca botones o divs que contengan palabras clave de inicio
-            const elementos = Array.from(document.querySelectorAll('button, div, span'));
-            const boton = elementos.find(el => {
+        // Lógica: Buscar botón de "Encender" o botón de "Anuncio/Confirmar"
+        console.log("Detectando estado del servidor...");
+        await page.waitForTimeout = (ms) => new Promise(res => setTimeout(res, ms));
+        await page.waitForTimeout(5000); // Pequeña espera para cargar botones
+
+        const accion = await page.evaluate(() => {
+            const botones = Array.from(document.querySelectorAll('button, div, span'));
+            
+            // 1. Intentar buscar el botón de encender
+            const btnEncender = botones.find(el => {
                 const txt = el.innerText.toLowerCase();
                 return (txt.includes('encender') || txt.includes('start') || txt.includes('iniciar'));
             });
 
-            if (boton) {
-                boton.click();
-                return true;
+            // 2. Intentar buscar el botón de anuncio o confirmar
+            const btnAnuncio = botones.find(el => {
+                const txt = el.innerText.toLowerCase();
+                return (txt.includes('ver anuncio') || txt.includes('watch ad') || txt.includes('continuar') || txt.includes('confirmar'));
+            });
+
+            if (btnAnuncio) {
+                btnAnuncio.click();
+                return "ANUNCIO_PRESIONADO";
+            } else if (btnEncender) {
+                btnEncender.click();
+                return "ENCENDER_PRESIONADO";
             }
-            return false;
+            return "NADA";
         });
 
-        if (presionado) {
-            console.log("✅ ¡Botón presionado con éxito!");
-        } else {
-            console.log("⚠️ No se encontró botón de encendido. ¿Ya estará prendido?");
-        }
+        console.log("Resultado de la acción:", accion);
+        
+        // Espera extra por si hay un video
+        console.log("Esperando 20 segundos por confirmación...");
+        await new Promise(r => setTimeout(r, 20000)); 
 
     } catch (error) {
         console.error("❌ Error durante el encendido:", error.message);
