@@ -6,52 +6,49 @@ const puppeteer = require('puppeteer');
   const browser = await puppeteer.launch({
     headless: "new",
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-blink-features=AutomationControlled', // Esconde que es un bot
-      '--window-size=1280,800'
+      '--no-sandbox', 
+      '--disable-setuid-sandbox', 
+      '--disable-blink-features=AutomationControlled',
+      '--disable-infobars',
+      '--window-size=375,667'
     ]
   });
 
   try {
     const page = await browser.newPage();
     
-    // Suplantar el User-Agent para que parezca un Chrome real en Windows
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36');
+    // Fingir que somos un iPhone para pasar desapercibido por Cloudflare
+    await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
     
-    // Eliminar la propiedad 'navigator.webdriver' que delata a los bots
+    // Eliminar la marca de "web driver" que nos delata como bots
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     });
 
     console.log("Navegando a Aternos...");
-    await page.goto('https://aternos.org/go/', { waitUntil: 'networkidle2', timeout: 60000 });
+    // Intentamos ir directo al panel de control
+    await page.goto('https://aternos.org/server/', { waitUntil: 'networkidle2', timeout: 60000 });
 
-    // Esperar a que el formulario sea visible
-    console.log("Buscando formulario...");
-    await page.waitForSelector('#user', { timeout: 30000 });
+    // Si nos manda a la página de login, es que no estamos autenticados
+    if (page.url().includes('go')) {
+        console.log("Redirigido a login, ingresando credenciales...");
+        await page.waitForSelector('input[name="user"]', { timeout: 20000 });
+        await page.type('input[name="user"]', process.env.ATERNOS_USER, { delay: 150 });
+        await page.type('input[name="password"]', process.env.ATERNOS_PASS, { delay: 150 });
+        await page.click('#login');
+        
+        console.log("Esperando carga tras login...");
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 });
+    }
 
-    console.log("Escribiendo credenciales...");
-    await page.type('#user', process.env.ATERNOS_USER, { delay: 100 });
-    await page.type('#password', process.env.ATERNOS_PASS, { delay: 100 });
-    
-    await page.click('#login');
-    
-    console.log("Esperando carga del panel...");
-    await page.waitForNavigation({ waitUntil: 'networkidle2' });
-    
-    // Hacer clic en el botón de encendido
-    console.log("Activando servidor...");
-    await page.waitForSelector('.btn-success', { timeout: 15000 });
+    console.log("Buscando botón de encendido...");
+    // Aternos tiene un botón verde muy específico, intentamos localizarlo
+    await page.waitForSelector('.btn-success', { timeout: 20000 });
     await page.click('.btn-success');
     
-    console.log("✅ ¡Servidor encendido con éxito!");
-    
+    console.log("✅ ¡Acción completada!");
   } catch (error) {
-    console.error("❌ Error durante la ejecución:", error.message);
-    // Guardar captura para depurar
-    await page.screenshot({ path: 'debug_error.png' });
+    console.error("❌ Error definitivo:", error.message);
   } finally {
     await browser.close();
     console.log("Portal cerrado.");
