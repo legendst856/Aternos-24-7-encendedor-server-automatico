@@ -2,45 +2,58 @@ const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const http = require('http');
 
-// Servidor básico para que Render no dé error de puerto
-http.createServer((req, res) => res.end('Encendedor Activo')).listen(process.env.PORT || 10000);
+// Servidor para Render
+http.createServer((req, res) => res.end('Encendedor Funcionando')).listen(process.env.PORT || 10000);
 
 async function ejecutarEncendido() {
-    console.log("Iniciando navegador para encender el servidor...");
+    console.log("Iniciando intento de encendido (Tolerancia: 3 minutos)...");
     let browser = null;
     try {
         browser = await puppeteer.launch({
-            args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+            args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
             executablePath: await chromium.executablePath(),
             headless: true
         });
 
         const page = await browser.newPage();
         
-        // Ir al login
+        // --- CONFIGURACIÓN DE TIEMPOS (3 MINUTOS) ---
+        const TRES_MINUTOS = 180000;
+        await page.setDefaultNavigationTimeout(TRES_MINUTOS);
+        await page.setDefaultTimeout(TRES_MINUTOS);
+
+        // Bloquear imágenes para cargar más rápido y ahorrar RAM
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            if (req.resourceType() === 'image') req.abort();
+            else req.continue();
+        });
+
+        console.log("Cargando página de login...");
         await page.goto('https://aternos.org/go/', { waitUntil: 'networkidle2' });
 
-        // Introducir credenciales
+        console.log("Escribiendo credenciales...");
         await page.type('#user', process.env.ATERNOS_USER);
         await page.type('#password', process.env.ATERNOS_PASS);
-        await page.click('#login');
-
-        // Esperar a que cargue el panel
-        await page.waitForNavigation({ waitUntil: 'networkidle2' });
-        console.log("Sesión iniciada correctamente.");
-
-        // Ir a la página del servidor específico
-        await page.goto(`https://aternos.org/server/`, { waitUntil: 'networkidle2' });
-
-        // Buscar y hacer clic en el botón de encender
-        // Aternos usa a veces clases como .btn-success o IDs específicos
-        const botonEncender = await page.waitForSelector('#start', { visible: true, timeout: 60000 });
-        await botonEncender.click();
-
-        console.log("¡Botón de encendido presionado!");
         
+        // Clic en login y esperamos un momento
+        await Promise.all([
+            page.click('#login'),
+            page.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => console.log("Navegación lenta, continuando..."))
+        ]);
+
+        console.log("Entrando al panel del servidor...");
+        await page.goto('https://aternos.org/server/', { waitUntil: 'networkidle2' });
+
+        // Buscamos el botón de encender (ID: start)
+        console.log("Buscando el botón de encendido...");
+        const botonEncender = await page.waitForSelector('#start', { visible: true, timeout: TRES_MINUTOS });
+        
+        await botonEncender.click();
+        console.log("✅ ¡Botón presionado con éxito!");
+
     } catch (error) {
-        console.error("Hubo un error al intentar encender:", error.message);
+        console.error("❌ Error tras esperar 3 min:", error.message);
     } finally {
         if (browser) {
             await browser.close();
@@ -49,8 +62,6 @@ async function ejecutarEncendido() {
     }
 }
 
-// Lo ejecuta al iniciar
+// Ejecutar al inicio y luego cada 20 minutos
 ejecutarEncendido();
-
-// Lo repite cada 30 minutos por si se apaga solo
-setInterval(ejecutarEncendido, 1800000);
+setInterval(ejecutarEncendido, 1200000);
