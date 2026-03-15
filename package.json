@@ -1,8 +1,16 @@
 {
+  "name": "portal-tamcpoco",
+  "version": "1.0.0",
+  "description": "Encendedor liviano para Aternos",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "puppeteer-core": "^23.0.0",
-    "@sparticuz/chromium": "^127.0.0"
+    "axios": "^1.6.0",
+    "mineflayer": "^4.20.0"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
